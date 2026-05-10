@@ -242,7 +242,7 @@
       </div>
     </div>
 
-    <div class="hint">技能球会让陨石速度和数量翻倍 · 分越高时间越少越危险 · 被撞减速 75%</div>
+    <div class="hint">新增回血、清屏、时间减速 · 难度已下调 · 技能球仍会引来少量陨石</div>
 
     <section class="menu" id="menu">
       <div class="card">
@@ -254,7 +254,7 @@
           </div>
         </div>
         <p class="grade" id="gradeText"></p>
-        <p id="menuText">拖动飞船收集能量球。吃技能球会让陨石速度和数量翻倍；分数越高、时间越少，陨石越多。被撞后移动速度削弱 75%。</p>
+        <p id="menuText">拖动飞船收集能量球。新增回血、清屏、时间减速、护盾和子弹。技能球会引来陨石，但整体难度已下调。</p>
         <button id="startButton" type="button">Start</button>
       </div>
     </section>
@@ -281,6 +281,7 @@
         lives: 3,
         ammo: 0,
         shield: 0,
+        slowmo: 0,
         best: Number(localStorage.getItem('comet-run-best') || 0),
         timeLeft: 45,
         last: performance.now(),
@@ -339,6 +340,7 @@
         state.lives = 3;
         state.ammo = 0;
         state.shield = 0;
+        state.slowmo = 0;
         state.timeLeft = 45;
         state.spawnTimer = 0;
         state.orbTimer = 0;
@@ -392,21 +394,25 @@
       function updateHud() {
         scoreEl.textContent = state.score;
         lifeEl.textContent = state.lives;
-        powerEl.textContent = state.shield > 0 ? `S${Math.ceil(state.shield)}` : state.ammo;
+        powerEl.textContent = state.slowmo > 0
+          ? `T${Math.ceil(state.slowmo)}`
+          : state.shield > 0
+            ? `S${Math.ceil(state.shield)}`
+            : state.ammo;
         timeEl.textContent = Math.max(0, Math.ceil(state.timeLeft));
         bestEl.textContent = state.best;
       }
 
       function pressure() {
-        const scorePressure = Math.min(3.2, state.score / 70);
-        const timePressure = Math.min(3.2, (45 - state.timeLeft) / 10);
-        return 1 + scorePressure + timePressure + state.danger;
+        const scorePressure = Math.min(1.6, state.score / 140);
+        const timePressure = Math.min(1.6, (45 - state.timeLeft) / 20);
+        return 1 + scorePressure + timePressure + state.danger * 0.5;
       }
 
       function spawnComet() {
         const pressureLevel = pressure();
         const size = Math.random() * 18 + 18 + Math.min(10, pressureLevel * 0.7);
-        const speed = (Math.random() * 120 + 150 + state.score * 0.9) * pressureLevel;
+        const speed = (Math.random() * 90 + 120 + state.score * 0.45) * pressureLevel;
         state.comets.push({
           x: Math.random() * state.width,
           y: -size - 12,
@@ -419,8 +425,8 @@
       }
 
       function spawnCometWave(amount) {
-        const doubledAmount = Math.ceil(amount * 2);
-        for (let i = 0; i < doubledAmount; i += 1) {
+        const softenedAmount = Math.max(1, Math.ceil(amount));
+        for (let i = 0; i < softenedAmount; i += 1) {
           const delayY = Math.random() * state.height * 0.42;
           spawnComet();
           state.comets[state.comets.length - 1].y -= delayY;
@@ -429,10 +435,15 @@
 
       function spawnOrb() {
         const roll = Math.random();
-        const type = roll > 0.82 ? 'shield' : roll > 0.62 ? 'ammo' : 'energy';
+        let type = 'energy';
+        if (roll > 0.9) type = 'nova';
+        else if (roll > 0.8) type = 'repair';
+        else if (roll > 0.68) type = 'slowmo';
+        else if (roll > 0.54) type = 'shield';
+        else if (roll > 0.38) type = 'ammo';
         if (type !== 'energy') {
-          state.danger += 1;
-          spawnCometWave(2 + Math.floor(pressure() * 0.6));
+          state.danger += 0.45;
+          spawnCometWave(1 + Math.floor(pressure() * 0.35));
         }
         state.orbs.push({
           x: Math.random() * (state.width - 70) + 35,
@@ -454,6 +465,14 @@
           vy: -620,
         });
         burst(state.player.x, state.player.y - 20, '#ffe16c', 8);
+      }
+
+      function clearComets(origin) {
+        const removed = state.comets.length;
+        for (const comet of state.comets) burst(comet.x, comet.y, '#ffe16c', 10);
+        state.comets = [];
+        state.score += removed;
+        burst(origin.x, origin.y, '#ffe16c', 42);
       }
 
       function burst(x, y, color, amount = 18) {
@@ -584,7 +603,15 @@
       function drawOrb(orb) {
         const r = orb.r + Math.sin(orb.pulse) * 2;
         ctx.save();
-        const color = orb.type === 'shield' ? '#7dd3ff' : orb.type === 'ammo' ? '#4de7ff' : '#34d3ff';
+        const colors = {
+          ammo: '#4de7ff',
+          shield: '#7dd3ff',
+          slowmo: '#b88cff',
+          repair: '#65f0a5',
+          nova: '#ffe16c',
+          energy: '#34d3ff',
+        };
+        const color = colors[orb.type] || '#34d3ff';
         ctx.shadowColor = color;
         ctx.shadowBlur = 22;
         ctx.fillStyle = color;
@@ -608,6 +635,30 @@
         if (orb.type === 'shield') {
           ctx.beginPath();
           ctx.arc(orb.x, orb.y, r * 0.58, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        if (orb.type === 'repair') {
+          ctx.beginPath();
+          ctx.moveTo(orb.x - 8, orb.y);
+          ctx.lineTo(orb.x + 8, orb.y);
+          ctx.moveTo(orb.x, orb.y - 8);
+          ctx.lineTo(orb.x, orb.y + 8);
+          ctx.stroke();
+        }
+        if (orb.type === 'slowmo') {
+          ctx.beginPath();
+          ctx.arc(orb.x, orb.y, r * 0.56, -Math.PI * 0.5, Math.PI * 1.2);
+          ctx.lineTo(orb.x, orb.y);
+          ctx.stroke();
+        }
+        if (orb.type === 'nova') {
+          ctx.beginPath();
+          for (let i = 0; i < 8; i += 1) {
+            const a = (i / 8) * Math.PI * 2;
+            const rr = i % 2 ? r * 0.35 : r * 0.72;
+            ctx.lineTo(orb.x + Math.cos(a) * rr, orb.y + Math.sin(a) * rr);
+          }
+          ctx.closePath();
           ctx.stroke();
         }
         ctx.restore();
@@ -645,6 +696,7 @@
         if (!state.running) return;
         state.timeLeft -= dt;
         state.shield = Math.max(0, state.shield - dt);
+        state.slowmo = Math.max(0, state.slowmo - dt);
         state.slow = Math.max(0, state.slow - dt);
         if (state.slow <= 0) state.slowStacks = 0;
         state.danger = Math.max(0, state.danger - dt * 0.12);
@@ -666,9 +718,10 @@
         state.shootTimer -= dt;
         if (state.spawnTimer <= 0) {
           const pressureLevel = pressure();
-          const count = Math.max(1, Math.floor(pressureLevel / 1.6));
+          const count = Math.max(1, Math.floor(pressureLevel / 2.2));
           spawnCometWave(count);
-          state.spawnTimer = Math.max(0.08, 0.74 / pressureLevel);
+          const slowmoRelief = state.slowmo > 0 ? 1.8 : 1;
+          state.spawnTimer = Math.max(0.16, (0.82 / pressureLevel) * slowmoRelief);
         }
         if (state.orbTimer <= 0) {
           spawnOrb();
@@ -700,8 +753,9 @@
 
         for (let i = state.comets.length - 1; i >= 0; i -= 1) {
           const c = state.comets[i];
-          c.x += c.vx * dt;
-          c.y += c.vy * dt;
+          const slowmoFactor = state.slowmo > 0 ? 0.45 : 1;
+          c.x += c.vx * dt * slowmoFactor;
+          c.y += c.vy * dt * slowmoFactor;
           c.rot += c.spin * dt;
           if (c.y - c.r > state.height + 40) {
             state.comets.splice(i, 1);
@@ -740,15 +794,30 @@
           }
           if (distance(orb, p) < orb.r + p.r) {
             if (orb.type === 'ammo') {
-              state.ammo += 18;
-              state.danger += 2;
-              spawnCometWave(4 + Math.floor(pressure()));
+              state.ammo += 16;
+              state.danger += 0.9;
+              spawnCometWave(2 + Math.floor(pressure() * 0.45));
               burst(orb.x, orb.y, '#ffe16c', 22);
             } else if (orb.type === 'shield') {
               state.shield = Math.max(state.shield, 7);
-              state.danger += 2;
-              spawnCometWave(4 + Math.floor(pressure()));
+              state.danger += 0.9;
+              spawnCometWave(2 + Math.floor(pressure() * 0.45));
               burst(orb.x, orb.y, '#7dd3ff', 26);
+            } else if (orb.type === 'repair') {
+              state.lives = Math.min(3, state.lives + 1);
+              state.score += 1;
+              state.danger += 0.6;
+              spawnCometWave(1 + Math.floor(pressure() * 0.35));
+              burst(orb.x, orb.y, '#65f0a5', 26);
+            } else if (orb.type === 'slowmo') {
+              state.slowmo = Math.max(state.slowmo, 5.5);
+              state.danger += 0.7;
+              spawnCometWave(1 + Math.floor(pressure() * 0.35));
+              burst(orb.x, orb.y, '#b88cff', 26);
+            } else if (orb.type === 'nova') {
+              clearComets(orb);
+              state.danger += 0.8;
+              spawnCometWave(2);
             } else {
               state.score += 3;
               burst(orb.x, orb.y, '#34d3ff', 18);
