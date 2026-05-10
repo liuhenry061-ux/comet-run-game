@@ -1,0 +1,873 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Comet Run</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+        background: #050711;
+        color: #f7f9ff;
+        touch-action: none;
+      }
+
+      * {
+        box-sizing: border-box;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+      }
+
+      body {
+        background:
+          radial-gradient(circle at 30% 16%, rgba(52, 211, 255, 0.16), transparent 18rem),
+          radial-gradient(circle at 78% 76%, rgba(255, 75, 137, 0.14), transparent 18rem),
+          #050711;
+      }
+
+      #game {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        display: block;
+      }
+
+      .hud {
+        position: fixed;
+        inset: max(14px, env(safe-area-inset-top)) 14px auto;
+        z-index: 3;
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 10px;
+        pointer-events: none;
+      }
+
+      .pill {
+        min-width: 76px;
+        padding: 10px 12px;
+        border: 1px solid rgba(247, 249, 255, 0.14);
+        border-radius: 8px;
+        background: rgba(7, 10, 20, 0.58);
+        box-shadow: 0 16px 50px rgba(0, 0, 0, 0.24);
+        backdrop-filter: blur(16px);
+      }
+
+      .pill span {
+        display: block;
+        color: rgba(247, 249, 255, 0.62);
+        font-size: 10px;
+        letter-spacing: 0.08em;
+      }
+
+      .pill strong {
+        display: block;
+        margin-top: 2px;
+        font-size: clamp(22px, 6vw, 34px);
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .menu {
+        position: fixed;
+        inset: 0;
+        z-index: 5;
+        display: grid;
+        place-items: center;
+        padding: 18px;
+        background: rgba(2, 4, 10, 0.34);
+        backdrop-filter: blur(8px);
+      }
+
+      .menu.hidden {
+        display: none;
+      }
+
+      .card {
+        width: min(420px, 100%);
+        display: grid;
+        gap: 14px;
+        padding: 18px;
+        border: 1px solid rgba(247, 249, 255, 0.16);
+        border-radius: 8px;
+        background: rgba(8, 11, 22, 0.82);
+        box-shadow: 0 28px 110px rgba(0, 0, 0, 0.48);
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .mark {
+        width: 42px;
+        height: 42px;
+        flex: 0 0 auto;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #34d3ff, #ff4b89 58%, #ffe16c);
+        box-shadow: 0 0 34px rgba(52, 211, 255, 0.52);
+      }
+
+      h1,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 26px;
+        line-height: 1;
+        letter-spacing: 0;
+      }
+
+      p {
+        color: rgba(247, 249, 255, 0.72);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      .grade {
+        display: none;
+        padding: 12px;
+        border: 1px solid rgba(255, 75, 137, 0.34);
+        border-radius: 8px;
+        background: rgba(255, 75, 137, 0.12);
+        color: #ffffff;
+        font-size: clamp(26px, 8vw, 42px);
+        font-weight: 950;
+        line-height: 1.08;
+        text-align: center;
+        text-transform: uppercase;
+        text-shadow:
+          0 0 18px rgba(255, 75, 137, 0.82),
+          0 3px 0 rgba(0, 0, 0, 0.38);
+      }
+
+      .grade.visible {
+        display: block;
+      }
+
+      button {
+        height: 48px;
+        border: 1px solid rgba(247, 249, 255, 0.16);
+        border-radius: 7px;
+        background: linear-gradient(135deg, rgba(52, 211, 255, 0.3), rgba(255, 75, 137, 0.28));
+        color: #f7f9ff;
+        font: inherit;
+        font-size: 16px;
+        font-weight: 750;
+        cursor: pointer;
+      }
+
+      button:active {
+        transform: translateY(1px);
+      }
+
+      .hint {
+        position: fixed;
+        left: 14px;
+        right: 14px;
+        bottom: max(14px, env(safe-area-inset-bottom));
+        z-index: 3;
+        padding: 10px 12px;
+        border: 1px solid rgba(247, 249, 255, 0.12);
+        border-radius: 8px;
+        background: rgba(7, 10, 20, 0.52);
+        color: rgba(247, 249, 255, 0.68);
+        font-size: 12px;
+        text-align: center;
+        backdrop-filter: blur(14px);
+        pointer-events: none;
+      }
+
+      @media (min-width: 720px) {
+        .hint {
+          left: 50%;
+          right: auto;
+          width: 430px;
+          transform: translateX(-50%);
+        }
+      }
+
+      @media (max-width: 420px) {
+        .hud {
+          gap: 6px;
+        }
+
+        .pill {
+          min-width: 66px;
+          padding: 8px 9px;
+        }
+
+        .pill strong {
+          font-size: 21px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+
+    <div class="hud">
+      <div class="pill">
+        <span>SCORE</span>
+        <strong id="score">0</strong>
+      </div>
+      <div class="pill">
+        <span>LIFE</span>
+        <strong id="life">3</strong>
+      </div>
+      <div class="pill">
+        <span>POWER</span>
+        <strong id="power">0</strong>
+      </div>
+      <div class="pill">
+        <span>TIME</span>
+        <strong id="time">45</strong>
+      </div>
+      <div class="pill">
+        <span>BEST</span>
+        <strong id="best">0</strong>
+      </div>
+    </div>
+
+    <div class="hint">新增回血、清屏、时间减速 · 难度已下调 · 技能球仍会引来少量陨石</div>
+
+    <section class="menu" id="menu">
+      <div class="card">
+        <div class="brand">
+          <div class="mark"></div>
+          <div>
+            <h1>Comet Run</h1>
+            <p>手机也能玩的太空闪避小游戏</p>
+          </div>
+        </div>
+        <p class="grade" id="gradeText"></p>
+        <p id="menuText">拖动飞船收集能量球。新增回血、清屏、时间减速、护盾和子弹。技能球会引来陨石，但整体难度已下调。</p>
+        <button id="startButton" type="button">Start</button>
+      </div>
+    </section>
+
+    <script>
+      const canvas = document.querySelector('#game');
+      const ctx = canvas.getContext('2d');
+      const scoreEl = document.querySelector('#score');
+      const lifeEl = document.querySelector('#life');
+      const powerEl = document.querySelector('#power');
+      const timeEl = document.querySelector('#time');
+      const bestEl = document.querySelector('#best');
+      const menu = document.querySelector('#menu');
+      const menuText = document.querySelector('#menuText');
+      const gradeText = document.querySelector('#gradeText');
+      const startButton = document.querySelector('#startButton');
+
+      const state = {
+        width: 0,
+        height: 0,
+        ratio: 1,
+        running: false,
+        score: 0,
+        lives: 3,
+        ammo: 0,
+        shield: 0,
+        slowmo: 0,
+        best: Number(localStorage.getItem('comet-run-best') || 0),
+        timeLeft: 45,
+        last: performance.now(),
+        spawnTimer: 0,
+        orbTimer: 0,
+        danger: 0,
+        shake: 0,
+        slow: 0,
+        slowStacks: 0,
+        player: { x: 0, y: 0, tx: 0, ty: 0, r: 18 },
+        comets: [],
+        orbs: [],
+        bullets: [],
+        stars: [],
+        bursts: [],
+        shootTimer: 0,
+      };
+
+      bestEl.textContent = state.best;
+
+      function resize() {
+        state.ratio = Math.min(window.devicePixelRatio || 1, 2);
+        state.width = Math.floor(window.innerWidth);
+        state.height = Math.floor(window.innerHeight);
+        canvas.width = Math.floor(state.width * state.ratio);
+        canvas.height = Math.floor(state.height * state.ratio);
+        canvas.style.width = `${state.width}px`;
+        canvas.style.height = `${state.height}px`;
+        ctx.setTransform(state.ratio, 0, 0, state.ratio, 0, 0);
+        if (!state.stars.length) {
+          state.stars = Array.from({ length: 120 }, () => makeStar());
+        }
+        state.player.x ||= state.width / 2;
+        state.player.y ||= state.height * 0.72;
+        state.player.tx = state.player.x;
+        state.player.ty = state.player.y;
+      }
+
+      function makeStar() {
+        return {
+          x: Math.random() * state.width,
+          y: Math.random() * state.height,
+          r: Math.random() * 1.8 + 0.4,
+          v: Math.random() * 40 + 16,
+          hue: Math.random() > 0.55 ? 194 : 330,
+        };
+      }
+
+      function distance(a, b) {
+        return Math.hypot(a.x - b.x, a.y - b.y);
+      }
+
+      function reset() {
+        state.running = true;
+        state.score = 0;
+        state.lives = 3;
+        state.ammo = 0;
+        state.shield = 0;
+        state.slowmo = 0;
+        state.timeLeft = 45;
+        state.spawnTimer = 0;
+        state.orbTimer = 0;
+        state.danger = 0;
+        state.shootTimer = 0;
+        state.shake = 0;
+        state.slow = 0;
+        state.slowStacks = 0;
+        state.comets = [];
+        state.orbs = [];
+        state.bullets = [];
+        state.bursts = [];
+        state.player.x = state.width / 2;
+        state.player.y = state.height * 0.72;
+        state.player.tx = state.player.x;
+        state.player.ty = state.player.y;
+        gradeText.classList.remove('visible');
+        gradeText.textContent = '';
+        menu.classList.add('hidden');
+        updateHud();
+      }
+
+      function gradeForScore(score) {
+        if (score < 50) return '《菜得抠脚啊你》';
+        if (score < 100) return '《有够菜的》';
+        if (score < 200) return '《是真人在玩吗》';
+        if (score < 300) return '《求真人教程》';
+        return '';
+      }
+
+      function endGame() {
+        state.running = false;
+        if (state.score > state.best) {
+          state.best = state.score;
+          localStorage.setItem('comet-run-best', String(state.best));
+        }
+        bestEl.textContent = state.best;
+        const grade = gradeForScore(state.score);
+        if (grade) {
+          gradeText.textContent = grade;
+          gradeText.classList.add('visible');
+        } else {
+          gradeText.classList.remove('visible');
+          gradeText.textContent = '';
+        }
+        menuText.textContent = `这局得分 ${state.score}。最高分 ${state.best}。再来一局？`;
+        startButton.textContent = 'Play Again';
+        menu.classList.remove('hidden');
+      }
+
+      function updateHud() {
+        scoreEl.textContent = state.score;
+        lifeEl.textContent = state.lives;
+        powerEl.textContent = state.slowmo > 0
+          ? `T${Math.ceil(state.slowmo)}`
+          : state.shield > 0
+            ? `S${Math.ceil(state.shield)}`
+            : state.ammo;
+        timeEl.textContent = Math.max(0, Math.ceil(state.timeLeft));
+        bestEl.textContent = state.best;
+      }
+
+      function pressure() {
+        const scorePressure = Math.min(1.6, state.score / 140);
+        const timePressure = Math.min(1.6, (45 - state.timeLeft) / 20);
+        return 1 + scorePressure + timePressure + state.danger * 0.5;
+      }
+
+      function spawnComet() {
+        const pressureLevel = pressure();
+        const size = Math.random() * 18 + 18 + Math.min(10, pressureLevel * 0.7);
+        const speed = (Math.random() * 90 + 120 + state.score * 0.45) * pressureLevel;
+        state.comets.push({
+          x: Math.random() * state.width,
+          y: -size - 12,
+          r: size,
+          vx: (Math.random() - 0.5) * 90,
+          vy: speed,
+          rot: Math.random() * Math.PI,
+          spin: (Math.random() - 0.5) * 4,
+        });
+      }
+
+      function spawnCometWave(amount) {
+        const softenedAmount = Math.max(1, Math.ceil(amount));
+        for (let i = 0; i < softenedAmount; i += 1) {
+          const delayY = Math.random() * state.height * 0.42;
+          spawnComet();
+          state.comets[state.comets.length - 1].y -= delayY;
+        }
+      }
+
+      function spawnOrb() {
+        const roll = Math.random();
+        let type = 'energy';
+        if (roll > 0.9) type = 'nova';
+        else if (roll > 0.8) type = 'repair';
+        else if (roll > 0.68) type = 'slowmo';
+        else if (roll > 0.54) type = 'shield';
+        else if (roll > 0.38) type = 'ammo';
+        if (type !== 'energy') {
+          state.danger += 0.45;
+          spawnCometWave(1 + Math.floor(pressure() * 0.35));
+        }
+        state.orbs.push({
+          x: Math.random() * (state.width - 70) + 35,
+          y: -30,
+          r: type === 'energy' ? 12 : 15,
+          vy: Math.random() * 70 + 105,
+          pulse: Math.random() * Math.PI * 2,
+          type,
+        });
+      }
+
+      function shoot() {
+        if (state.ammo <= 0) return;
+        state.ammo -= 1;
+        state.bullets.push({
+          x: state.player.x,
+          y: state.player.y - 26,
+          r: 5,
+          vy: -620,
+        });
+        burst(state.player.x, state.player.y - 20, '#ffe16c', 8);
+      }
+
+      function clearComets(origin) {
+        const removed = state.comets.length;
+        for (const comet of state.comets) burst(comet.x, comet.y, '#ffe16c', 10);
+        state.comets = [];
+        state.score += removed;
+        burst(origin.x, origin.y, '#ffe16c', 42);
+      }
+
+      function burst(x, y, color, amount = 18) {
+        for (let i = 0; i < amount; i += 1) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = Math.random() * 240 + 60;
+          state.bursts.push({
+            x,
+            y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: Math.random() * 0.35 + 0.22,
+            color,
+          });
+        }
+      }
+
+      function drawBackground(dt) {
+        const grd = ctx.createLinearGradient(0, 0, 0, state.height);
+        grd.addColorStop(0, '#080c1b');
+        grd.addColorStop(0.58, '#070813');
+        grd.addColorStop(1, '#04050b');
+        ctx.fillStyle = grd;
+        ctx.fillRect(0, 0, state.width, state.height);
+
+        for (const star of state.stars) {
+          star.y += star.v * dt;
+          if (star.y > state.height + 4) {
+            star.x = Math.random() * state.width;
+            star.y = -4;
+          }
+          ctx.fillStyle = `hsla(${star.hue}, 100%, 72%, 0.72)`;
+          ctx.beginPath();
+          ctx.arc(star.x, star.y, star.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      function drawShip() {
+        const p = state.player;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        const slowFlash = state.slow > 0 ? Math.sin(performance.now() * 0.028) * 0.5 + 0.5 : 0;
+        if (state.shield > 0) {
+          ctx.strokeStyle = `rgba(52, 211, 255, ${0.48 + Math.sin(performance.now() * 0.01) * 0.16})`;
+          ctx.lineWidth = 4;
+          ctx.shadowColor = '#34d3ff';
+          ctx.shadowBlur = 24;
+          ctx.beginPath();
+          ctx.arc(0, 1, 36, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.shadowColor = state.slow > 0 ? '#ff4b89' : '#34d3ff';
+        ctx.shadowBlur = 26;
+
+        ctx.fillStyle = state.slow > 0 ? `rgba(255, ${150 + slowFlash * 80}, 190, 0.98)` : '#f7f9ff';
+        ctx.beginPath();
+        ctx.moveTo(0, -24);
+        ctx.lineTo(13, 17);
+        ctx.lineTo(0, 10);
+        ctx.lineTo(-13, 17);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#8de8ff';
+        ctx.beginPath();
+        ctx.moveTo(-13, 5);
+        ctx.lineTo(-32, 24);
+        ctx.lineTo(-8, 19);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.moveTo(13, 5);
+        ctx.lineTo(32, 24);
+        ctx.lineTo(8, 19);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#29344f';
+        ctx.beginPath();
+        ctx.moveTo(0, -12);
+        ctx.lineTo(8, 13);
+        ctx.lineTo(0, 8);
+        ctx.lineTo(-8, 13);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#34d3ff';
+        ctx.beginPath();
+        ctx.arc(0, 0, 5.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+        ctx.fillRect(-4, 14, 8, 11);
+        ctx.fillStyle = 'rgba(255, 225, 108, 0.9)';
+        ctx.beginPath();
+        ctx.moveTo(-10, 23);
+        ctx.lineTo(0, 42 + Math.random() * 12);
+        ctx.lineTo(10, 23);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function drawComet(comet) {
+        ctx.save();
+        ctx.translate(comet.x, comet.y);
+        ctx.rotate(comet.rot);
+        ctx.shadowColor = '#ff4b89';
+        ctx.shadowBlur = 20;
+        ctx.fillStyle = '#ff4b89';
+        ctx.beginPath();
+        for (let i = 0; i < 9; i += 1) {
+          const a = (i / 9) * Math.PI * 2;
+          const r = comet.r * (0.72 + (i % 2) * 0.28);
+          ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.72)';
+        ctx.beginPath();
+        ctx.arc(-comet.r * 0.2, -comet.r * 0.18, comet.r * 0.18, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function drawOrb(orb) {
+        const r = orb.r + Math.sin(orb.pulse) * 2;
+        ctx.save();
+        const colors = {
+          ammo: '#4de7ff',
+          shield: '#7dd3ff',
+          slowmo: '#b88cff',
+          repair: '#65f0a5',
+          nova: '#ffe16c',
+          energy: '#34d3ff',
+        };
+        const color = colors[orb.type] || '#34d3ff';
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 22;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(orb.x, orb.y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(orb.x - 3, orb.y - 4, r * 0.34, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2.5;
+        if (orb.type === 'ammo') {
+          ctx.beginPath();
+          ctx.moveTo(orb.x + 2, orb.y - 9);
+          ctx.lineTo(orb.x - 4, orb.y + 2);
+          ctx.lineTo(orb.x + 3, orb.y + 2);
+          ctx.lineTo(orb.x - 2, orb.y + 10);
+          ctx.stroke();
+        }
+        if (orb.type === 'shield') {
+          ctx.beginPath();
+          ctx.arc(orb.x, orb.y, r * 0.58, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        if (orb.type === 'repair') {
+          ctx.beginPath();
+          ctx.moveTo(orb.x - 8, orb.y);
+          ctx.lineTo(orb.x + 8, orb.y);
+          ctx.moveTo(orb.x, orb.y - 8);
+          ctx.lineTo(orb.x, orb.y + 8);
+          ctx.stroke();
+        }
+        if (orb.type === 'slowmo') {
+          ctx.beginPath();
+          ctx.arc(orb.x, orb.y, r * 0.56, -Math.PI * 0.5, Math.PI * 1.2);
+          ctx.lineTo(orb.x, orb.y);
+          ctx.stroke();
+        }
+        if (orb.type === 'nova') {
+          ctx.beginPath();
+          for (let i = 0; i < 8; i += 1) {
+            const a = (i / 8) * Math.PI * 2;
+            const rr = i % 2 ? r * 0.35 : r * 0.72;
+            ctx.lineTo(orb.x + Math.cos(a) * rr, orb.y + Math.sin(a) * rr);
+          }
+          ctx.closePath();
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      function drawBullet(bullet) {
+        ctx.save();
+        ctx.shadowColor = '#ffe16c';
+        ctx.shadowBlur = 20;
+        ctx.fillStyle = '#ffe16c';
+        ctx.beginPath();
+        ctx.roundRect(bullet.x - 3, bullet.y - 14, 6, 20, 4);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function drawBursts(dt) {
+        for (let i = state.bursts.length - 1; i >= 0; i -= 1) {
+          const b = state.bursts[i];
+          b.life -= dt;
+          b.x += b.vx * dt;
+          b.y += b.vy * dt;
+          if (b.life <= 0) {
+            state.bursts.splice(i, 1);
+            continue;
+          }
+          ctx.globalAlpha = Math.min(1, b.life * 2.6);
+          ctx.fillStyle = b.color;
+          ctx.fillRect(b.x, b.y, 4, 4);
+          ctx.globalAlpha = 1;
+        }
+      }
+
+      function update(dt) {
+        if (!state.running) return;
+        state.timeLeft -= dt;
+        state.shield = Math.max(0, state.shield - dt);
+        state.slowmo = Math.max(0, state.slowmo - dt);
+        state.slow = Math.max(0, state.slow - dt);
+        if (state.slow <= 0) state.slowStacks = 0;
+        state.danger = Math.max(0, state.danger - dt * 0.12);
+        if (state.timeLeft <= 0) {
+          endGame();
+          return;
+        }
+
+        const p = state.player;
+        const slowFactor = state.slow > 0 ? Math.max(0.04, 0.25 ** state.slowStacks) : 1;
+        const controlSpeed = 12 * slowFactor;
+        p.x += (p.tx - p.x) * Math.min(1, dt * controlSpeed);
+        p.y += (p.ty - p.y) * Math.min(1, dt * controlSpeed);
+        p.x = Math.max(p.r + 8, Math.min(state.width - p.r - 8, p.x));
+        p.y = Math.max(p.r + 72, Math.min(state.height - p.r - 26, p.y));
+
+        state.spawnTimer -= dt;
+        state.orbTimer -= dt;
+        state.shootTimer -= dt;
+        if (state.spawnTimer <= 0) {
+          const pressureLevel = pressure();
+          const count = Math.max(1, Math.floor(pressureLevel / 2.2));
+          spawnCometWave(count);
+          const slowmoRelief = state.slowmo > 0 ? 1.8 : 1;
+          state.spawnTimer = Math.max(0.16, (0.82 / pressureLevel) * slowmoRelief);
+        }
+        if (state.orbTimer <= 0) {
+          spawnOrb();
+          state.orbTimer = Math.max(0.36, 1.05 - state.score * 0.004);
+        }
+        if (state.ammo > 0 && state.shootTimer <= 0) {
+          shoot();
+          state.shootTimer = 0.2;
+        }
+
+        for (let i = state.bullets.length - 1; i >= 0; i -= 1) {
+          const bullet = state.bullets[i];
+          bullet.y += bullet.vy * dt;
+          if (bullet.y < -30) {
+            state.bullets.splice(i, 1);
+            continue;
+          }
+          for (let j = state.comets.length - 1; j >= 0; j -= 1) {
+            const comet = state.comets[j];
+            if (distance(bullet, comet) < bullet.r + comet.r * 0.72) {
+              state.score += 2;
+              burst(comet.x, comet.y, '#ffe16c', 24);
+              state.bullets.splice(i, 1);
+              state.comets.splice(j, 1);
+              break;
+            }
+          }
+        }
+
+        for (let i = state.comets.length - 1; i >= 0; i -= 1) {
+          const c = state.comets[i];
+          const slowmoFactor = state.slowmo > 0 ? 0.45 : 1;
+          c.x += c.vx * dt * slowmoFactor;
+          c.y += c.vy * dt * slowmoFactor;
+          c.rot += c.spin * dt;
+          if (c.y - c.r > state.height + 40) {
+            state.comets.splice(i, 1);
+            continue;
+          }
+          if (distance(c, p) < c.r + p.r * 0.68) {
+            if (state.shield > 0) {
+              state.score += 1;
+              burst(c.x, c.y, '#34d3ff', 30);
+            } else {
+              state.lives -= 1;
+              state.shake = 0.28;
+              state.slowStacks += 1;
+              state.slow = 4.2;
+              burst(p.x, p.y, '#ff4b89', 28);
+              if (state.lives <= 0) {
+                state.comets.splice(i, 1);
+                updateHud();
+                endGame();
+                return;
+              }
+            }
+            state.shake = 0.28;
+            state.comets.splice(i, 1);
+            updateHud();
+          }
+        }
+
+        for (let i = state.orbs.length - 1; i >= 0; i -= 1) {
+          const orb = state.orbs[i];
+          orb.y += orb.vy * dt;
+          orb.pulse += dt * 7;
+          if (orb.y > state.height + 30) {
+            state.orbs.splice(i, 1);
+            continue;
+          }
+          if (distance(orb, p) < orb.r + p.r) {
+            if (orb.type === 'ammo') {
+              state.ammo += 16;
+              state.danger += 0.9;
+              spawnCometWave(2 + Math.floor(pressure() * 0.45));
+              burst(orb.x, orb.y, '#ffe16c', 22);
+            } else if (orb.type === 'shield') {
+              state.shield = Math.max(state.shield, 7);
+              state.danger += 0.9;
+              spawnCometWave(2 + Math.floor(pressure() * 0.45));
+              burst(orb.x, orb.y, '#7dd3ff', 26);
+            } else if (orb.type === 'repair') {
+              state.lives = Math.min(3, state.lives + 1);
+              state.score += 1;
+              state.danger += 0.6;
+              spawnCometWave(1 + Math.floor(pressure() * 0.35));
+              burst(orb.x, orb.y, '#65f0a5', 26);
+            } else if (orb.type === 'slowmo') {
+              state.slowmo = Math.max(state.slowmo, 5.5);
+              state.danger += 0.7;
+              spawnCometWave(1 + Math.floor(pressure() * 0.35));
+              burst(orb.x, orb.y, '#b88cff', 26);
+            } else if (orb.type === 'nova') {
+              clearComets(orb);
+              state.danger += 0.8;
+              spawnCometWave(2);
+            } else {
+              state.score += 3;
+              burst(orb.x, orb.y, '#34d3ff', 18);
+            }
+            burst(orb.x, orb.y, '#34d3ff', 18);
+            state.orbs.splice(i, 1);
+            updateHud();
+          }
+        }
+
+        updateHud();
+      }
+
+      function frame(now) {
+        const dt = Math.min((now - state.last) / 1000, 0.032);
+        state.last = now;
+        drawBackground(dt);
+        ctx.save();
+        if (state.shake > 0) {
+          state.shake -= dt;
+          ctx.translate((Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10);
+        }
+        update(dt);
+        for (const orb of state.orbs) drawOrb(orb);
+        for (const bullet of state.bullets) drawBullet(bullet);
+        for (const comet of state.comets) drawComet(comet);
+        drawShip();
+        drawBursts(dt);
+        ctx.restore();
+        requestAnimationFrame(frame);
+      }
+
+      function setTarget(clientX, clientY) {
+        state.player.tx = clientX;
+        state.player.ty = clientY;
+      }
+
+      window.addEventListener('pointermove', (event) => {
+        setTarget(event.clientX, event.clientY);
+      });
+
+      window.addEventListener('pointerdown', (event) => {
+        setTarget(event.clientX, event.clientY);
+        if (!state.running && menu.classList.contains('hidden')) reset();
+      });
+
+      startButton.addEventListener('click', reset);
+      window.addEventListener('resize', resize);
+      resize();
+      requestAnimationFrame(frame);
+    </script>
+  </body>
+</html>
