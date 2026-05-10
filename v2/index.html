@@ -242,7 +242,7 @@
       </div>
     </div>
 
-    <div class="hint">炸弹会把飞船弹飞三次 · 技能叠子弹会强化火力 · 陨石更多但留路线</div>
+    <div class="hint">陨石基础密度半屏 · 护盾会爆涨陨石 · 强化子弹会翻倍压力</div>
 
     <section class="menu" id="menu">
       <div class="card">
@@ -254,7 +254,7 @@
           </div>
         </div>
         <p class="grade" id="gradeText"></p>
-        <p id="menuText">拖动飞船收集能量球，躲开陨石和炸弹。子弹和任意技能叠在一起会强化成三列高速火力，但炸弹会把飞船弹飞三次。</p>
+        <p id="menuText">拖动飞船收集能量球，躲开陨石和炸弹。陨石基础密度会维持在半屏左右，强化子弹会让陨石翻倍，护盾会让陨石翻三倍。</p>
         <button id="startButton" type="button">Start</button>
       </div>
     </section>
@@ -433,11 +433,19 @@
         return 1 + scorePressure + timePressure + state.danger * 0.24;
       }
 
+      function cometCapacity() {
+        const slotArea = state.width < 520 ? 6200 : 7600;
+        return Math.max(24, Math.floor((state.width * state.height) / slotArea));
+      }
+
+      function baseCometTarget() {
+        const capacity = cometCapacity();
+        const lateBoost = Math.min(0.12, state.score / 1800) + Math.min(0.08, (45 - state.timeLeft) / 560);
+        return Math.floor(capacity * (0.5 + lateBoost));
+      }
+
       function maxComets() {
-        const mobileBase = state.width < 520 ? 9 : 14;
-        const scoreLoad = Math.min(state.width < 520 ? 7 : 11, state.score / 55);
-        const timeLoad = Math.min(state.width < 520 ? 6 : 9, (45 - state.timeLeft) / 7);
-        return Math.floor(mobileBase + scoreLoad + timeLoad);
+        return Math.floor(cometCapacity() * 0.8);
       }
 
       function updateSafePath(dt) {
@@ -480,13 +488,19 @@
       }
 
       function spawnCometWave(amount) {
+        if (amount <= 0) return;
         const openSlots = Math.max(0, maxComets() - state.comets.length);
         const softenedAmount = Math.min(openSlots, Math.max(1, Math.ceil(amount)));
         for (let i = 0; i < softenedAmount; i += 1) {
-          const delayY = Math.random() * state.height * 0.28;
+          const delayY = Math.random() * state.height * 0.58;
           const made = spawnComet();
           if (made) state.comets[state.comets.length - 1].y -= delayY;
         }
+      }
+
+      function pushCometDensity(multiplier = 1) {
+        const wanted = Math.min(maxComets(), Math.ceil(baseCometTarget() * multiplier));
+        spawnCometWave(wanted - state.comets.length);
       }
 
       function spawnOrb() {
@@ -512,9 +526,10 @@
         return state.shield > 0 || state.slowmo > 0;
       }
 
-      function empowerAmmo() {
+      function empowerAmmo(multiplier = 2) {
         if (state.ammo <= 0) return;
         state.ammoBoost = Math.max(state.ammoBoost, 5);
+        pushCometDensity(multiplier);
         burst(state.player.x, state.player.y - 30, '#ffe16c', 30);
       }
 
@@ -859,12 +874,15 @@
         state.shootTimer -= dt;
         if (state.spawnTimer <= 0) {
           const pressureLevel = pressure();
+          const target = baseCometTarget();
+          const refill = Math.max(0, target - state.comets.length);
           const count = 1
             + (pressureLevel > 2.08 && Math.random() > 0.34 ? 1 : 0)
-            + (pressureLevel > 2.82 && Math.random() > 0.7 ? 1 : 0);
+            + (pressureLevel > 2.82 && Math.random() > 0.7 ? 1 : 0)
+            + Math.min(7, Math.ceil(refill * 0.34));
           spawnCometWave(count);
           const slowmoRelief = state.slowmo > 0 ? 1.8 : 1;
-          state.spawnTimer = Math.max(0.28, (0.92 / pressureLevel) * slowmoRelief);
+          state.spawnTimer = Math.max(0.16, (0.52 / pressureLevel) * slowmoRelief);
         }
         if (state.orbTimer <= 0) {
           spawnOrb();
@@ -944,7 +962,8 @@
               burst(orb.x, orb.y, '#ffe16c', 22);
             } else if (orb.type === 'shield') {
               state.shield = Math.max(state.shield, 5);
-              empowerAmmo();
+              pushCometDensity(3);
+              empowerAmmo(3);
               state.danger = Math.max(0, state.danger - 0.22);
               burst(orb.x, orb.y, '#7dd3ff', 26);
             } else if (orb.type === 'repair') {
