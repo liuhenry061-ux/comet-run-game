@@ -242,7 +242,7 @@
       </div>
     </div>
 
-    <div class="hint">陨石基础密度半屏 · 护盾会爆涨陨石 · 强化子弹会翻倍压力</div>
+    <div class="hint">技能会让陨石加速 · 20秒后三连炸 · 炸弹更多更狠</div>
 
     <section class="menu" id="menu">
       <div class="card">
@@ -254,7 +254,7 @@
           </div>
         </div>
         <p class="grade" id="gradeText"></p>
-        <p id="menuText">拖动飞船收集能量球，躲开陨石和炸弹。陨石基础密度会维持在半屏左右，强化子弹会让陨石翻倍，护盾会让陨石翻三倍。</p>
+        <p id="menuText">拖动飞船收集能量球，躲开陨石和炸弹。技能会让陨石速度翻倍，活过 20 秒会强制三连炸，炸飞后的撞击速度更快。</p>
         <button id="startButton" type="button">Start</button>
       </div>
     </section>
@@ -292,6 +292,7 @@
         shake: 0,
         slow: 0,
         slowStacks: 0,
+        cometHaste: 0,
         safeX: 0,
         safeWidth: 150,
         pathTimer: 0,
@@ -299,6 +300,7 @@
         bombHits: 0,
         bombVx: 0,
         bombVy: 0,
+        forcedBombed: false,
         player: { x: 0, y: 0, tx: 0, ty: 0, r: 18 },
         comets: [],
         orbs: [],
@@ -364,6 +366,7 @@
         state.shake = 0;
         state.slow = 0;
         state.slowStacks = 0;
+        state.cometHaste = 0;
         state.safeX = state.width / 2;
         state.safeWidth = Math.max(118, Math.min(185, state.width * 0.28));
         state.pathTimer = 0;
@@ -371,6 +374,7 @@
         state.bombHits = 0;
         state.bombVx = 0;
         state.bombVy = 0;
+        state.forcedBombed = false;
         state.comets = [];
         state.orbs = [];
         state.bullets = [];
@@ -506,12 +510,12 @@
       function spawnOrb() {
         const roll = Math.random();
         let type = 'energy';
-        if (roll > 0.92) type = 'bomb';
-        else if (roll > 0.84) type = 'nova';
-        else if (roll > 0.75) type = 'repair';
-        else if (roll > 0.63) type = 'slowmo';
-        else if (roll > 0.49) type = 'shield';
-        else if (roll > 0.31) type = 'ammo';
+        if (roll > 0.82) type = 'bomb';
+        else if (roll > 0.75) type = 'nova';
+        else if (roll > 0.66) type = 'repair';
+        else if (roll > 0.54) type = 'slowmo';
+        else if (roll > 0.4) type = 'shield';
+        else if (roll > 0.22) type = 'ammo';
         state.orbs.push({
           x: Math.random() * (state.width - 70) + 35,
           y: -30,
@@ -531,6 +535,12 @@
         state.ammoBoost = Math.max(state.ammoBoost, 5);
         pushCometDensity(multiplier);
         burst(state.player.x, state.player.y - 30, '#ffe16c', 30);
+      }
+
+      function triggerSkillHaste() {
+        state.cometHaste = Math.max(state.cometHaste, 4.2);
+        state.danger += 0.28;
+        burst(state.player.x, state.player.y - 38, '#ff4b89', 20);
       }
 
       function shoot() {
@@ -553,12 +563,27 @@
         state.bombInvuln = 1.8;
         state.bombHits = 3;
         const angle = Math.atan2(state.player.y - origin.y, state.player.x - origin.x) || -Math.PI * 0.5;
-        const speed = state.width < 520 ? 760 : 980;
+        const speed = (state.width < 520 ? 760 : 980) * 3;
         state.bombVx = Math.cos(angle) * speed;
         state.bombVy = Math.sin(angle) * speed - 260;
         state.shake = 0.42;
         burst(origin.x, origin.y, '#ff7a1a', 56);
         burst(state.player.x, state.player.y, '#ffffff', 34);
+      }
+
+      function forceTripleBomb() {
+        state.forcedBombed = true;
+        triggerBombHit({ x: state.player.x, y: state.player.y - 90 });
+        for (let i = 0; i < 3; i += 1) {
+          state.orbs.push({
+            x: clamp(state.player.x + (i - 1) * 54, 35, state.width - 35),
+            y: state.player.y - 120 - i * 28,
+            r: 18,
+            vy: 170 + i * 20,
+            pulse: Math.random() * Math.PI * 2,
+            type: 'bomb',
+          });
+        }
       }
 
       function clearComets(origin) {
@@ -824,11 +849,15 @@
         state.shield = Math.max(0, state.shield - dt);
         state.slowmo = Math.max(0, state.slowmo - dt);
         state.ammoBoost = Math.max(0, state.ammoBoost - dt);
+        state.cometHaste = Math.max(0, state.cometHaste - dt);
         state.bombInvuln = Math.max(0, state.bombInvuln - dt);
         state.slow = Math.max(0, state.slow - dt);
         if (state.slow <= 0) state.slowStacks = 0;
         state.danger = Math.max(0, state.danger - dt * 0.12);
         updateSafePath(dt);
+        if (!state.forcedBombed && 45 - state.timeLeft >= 20) {
+          forceTripleBomb();
+        }
         if (state.timeLeft <= 0) {
           endGame();
           return;
@@ -915,8 +944,9 @@
         for (let i = state.comets.length - 1; i >= 0; i -= 1) {
           const c = state.comets[i];
           const slowmoFactor = state.slowmo > 0 ? 0.45 : 1;
-          c.x += c.vx * dt * slowmoFactor;
-          c.y += c.vy * dt * slowmoFactor;
+          const hasteFactor = state.cometHaste > 0 ? 2 : 1;
+          c.x += c.vx * dt * slowmoFactor * hasteFactor;
+          c.y += c.vy * dt * slowmoFactor * hasteFactor;
           c.rot += c.spin * dt;
           if (c.y - c.r > state.height + 40) {
             state.comets.splice(i, 1);
@@ -957,11 +987,13 @@
             if (orb.type === 'ammo') {
               const shouldBoost = hasActiveSkill();
               state.ammo += shouldBoost ? 20 : 10;
+              triggerSkillHaste();
               if (shouldBoost) empowerAmmo();
               state.danger = Math.max(0, state.danger - 0.22);
               burst(orb.x, orb.y, '#ffe16c', 22);
             } else if (orb.type === 'shield') {
               state.shield = Math.max(state.shield, 5);
+              triggerSkillHaste();
               pushCometDensity(3);
               empowerAmmo(3);
               state.danger = Math.max(0, state.danger - 0.22);
@@ -969,16 +1001,19 @@
             } else if (orb.type === 'repair') {
               state.lives = Math.min(3, state.lives + 1);
               state.score += 1;
+              triggerSkillHaste();
               empowerAmmo();
               state.danger = Math.max(0, state.danger - 0.16);
               burst(orb.x, orb.y, '#65f0a5', 26);
             } else if (orb.type === 'slowmo') {
               state.slowmo = Math.max(state.slowmo, 4);
+              triggerSkillHaste();
               empowerAmmo();
               state.danger = Math.max(0, state.danger - 0.34);
               burst(orb.x, orb.y, '#b88cff', 26);
             } else if (orb.type === 'nova') {
               clearComets(orb);
+              triggerSkillHaste();
               empowerAmmo();
               state.danger = Math.max(0, state.danger - 0.42);
             } else if (orb.type === 'bomb') {
