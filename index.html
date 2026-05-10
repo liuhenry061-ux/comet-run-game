@@ -242,7 +242,7 @@
       </div>
     </div>
 
-    <div class="hint">拖动飞船 · 技能球会引来陨石潮 · 被撞会短暂减速 · 撞 3 次结束</div>
+    <div class="hint">技能球会让陨石速度和数量翻倍 · 分越高时间越少越危险 · 被撞减速 75%</div>
 
     <section class="menu" id="menu">
       <div class="card">
@@ -254,7 +254,7 @@
           </div>
         </div>
         <p class="grade" id="gradeText"></p>
-        <p id="menuText">拖动飞船收集能量球。闪电球给子弹，圆环球给护盾，但技能会引来更多陨石。被撞后会短暂减速。</p>
+        <p id="menuText">拖动飞船收集能量球。吃技能球会让陨石速度和数量翻倍；分数越高、时间越少，陨石越多。被撞后移动速度削弱 75%。</p>
         <button id="startButton" type="button">Start</button>
       </div>
     </section>
@@ -397,9 +397,16 @@
         bestEl.textContent = state.best;
       }
 
+      function pressure() {
+        const scorePressure = Math.min(3.2, state.score / 70);
+        const timePressure = Math.min(3.2, (45 - state.timeLeft) / 10);
+        return 1 + scorePressure + timePressure + state.danger;
+      }
+
       function spawnComet() {
-        const size = Math.random() * 18 + 18 + Math.min(8, state.danger * 0.35);
-        const speed = Math.random() * 120 + 150 + state.score * 1.2 + state.danger * 7;
+        const pressureLevel = pressure();
+        const size = Math.random() * 18 + 18 + Math.min(10, pressureLevel * 0.7);
+        const speed = (Math.random() * 120 + 150 + state.score * 0.9) * pressureLevel;
         state.comets.push({
           x: Math.random() * state.width,
           y: -size - 12,
@@ -412,7 +419,8 @@
       }
 
       function spawnCometWave(amount) {
-        for (let i = 0; i < amount; i += 1) {
+        const doubledAmount = Math.ceil(amount * 2);
+        for (let i = 0; i < doubledAmount; i += 1) {
           const delayY = Math.random() * state.height * 0.42;
           spawnComet();
           state.comets[state.comets.length - 1].y -= delayY;
@@ -423,8 +431,8 @@
         const roll = Math.random();
         const type = roll > 0.82 ? 'shield' : roll > 0.62 ? 'ammo' : 'energy';
         if (type !== 'energy') {
-          state.danger += 1.2;
-          spawnCometWave(1 + Math.floor(Math.random() * 2));
+          state.danger += 1;
+          spawnCometWave(2 + Math.floor(pressure() * 0.6));
         }
         state.orbs.push({
           x: Math.random() * (state.width - 70) + 35,
@@ -639,14 +647,14 @@
         state.shield = Math.max(0, state.shield - dt);
         state.slow = Math.max(0, state.slow - dt);
         if (state.slow <= 0) state.slowStacks = 0;
-        state.danger = Math.max(0, state.danger - dt * 0.22);
+        state.danger = Math.max(0, state.danger - dt * 0.12);
         if (state.timeLeft <= 0) {
           endGame();
           return;
         }
 
         const p = state.player;
-        const slowFactor = state.slow > 0 ? Math.max(0.12, 0.5 ** state.slowStacks) : 1;
+        const slowFactor = state.slow > 0 ? Math.max(0.04, 0.25 ** state.slowStacks) : 1;
         const controlSpeed = 12 * slowFactor;
         p.x += (p.tx - p.x) * Math.min(1, dt * controlSpeed);
         p.y += (p.ty - p.y) * Math.min(1, dt * controlSpeed);
@@ -657,8 +665,10 @@
         state.orbTimer -= dt;
         state.shootTimer -= dt;
         if (state.spawnTimer <= 0) {
-          spawnComet();
-          state.spawnTimer = Math.max(0.16, 0.72 - state.score * 0.008 - state.danger * 0.018);
+          const pressureLevel = pressure();
+          const count = Math.max(1, Math.floor(pressureLevel / 1.6));
+          spawnCometWave(count);
+          state.spawnTimer = Math.max(0.08, 0.74 / pressureLevel);
         }
         if (state.orbTimer <= 0) {
           spawnOrb();
@@ -731,13 +741,13 @@
           if (distance(orb, p) < orb.r + p.r) {
             if (orb.type === 'ammo') {
               state.ammo += 18;
-              state.danger += 2.4;
-              spawnCometWave(3);
+              state.danger += 2;
+              spawnCometWave(4 + Math.floor(pressure()));
               burst(orb.x, orb.y, '#ffe16c', 22);
             } else if (orb.type === 'shield') {
               state.shield = Math.max(state.shield, 7);
               state.danger += 2;
-              spawnCometWave(2);
+              spawnCometWave(4 + Math.floor(pressure()));
               burst(orb.x, orb.y, '#7dd3ff', 26);
             } else {
               state.score += 3;
